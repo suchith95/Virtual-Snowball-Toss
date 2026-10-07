@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Snowball Toss - Counseling & SEL Activity</title>
+    <title>Virtual Snowball Toss - Interactive SEL Activity</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -87,9 +87,15 @@
         </div>
 
         <div id="room-status-bar" class="hidden flex items-center gap-3">
-            <div class="glass-pill px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 text-slate-200">
+            <div id="connection-badge" class="glass-pill px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 text-slate-200">
                 <span id="live-indicator-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="connection-text">Syncing...</span>
+            </div>
+            <div class="glass-pill px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-2 text-slate-200">
                 <span>Room: <strong id="header-room-code" class="font-mono text-cyan-400 text-sm tracking-wider">----</strong></span>
+                <button onclick="copyRoomCode()" class="text-slate-400 hover:text-white transition-colors" title="Copy Code">
+                    <i class="ph-bold ph-copy text-sm"></i>
+                </button>
             </div>
             <button id="leave-room-btn" onclick="leaveSession()" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-xs flex items-center gap-1" title="Leave Session">
                 <i class="ph-bold ph-sign-out text-base"></i>
@@ -101,8 +107,11 @@
     <!-- Sandbox Notification Banner -->
     <div id="sandbox-banner" class="hidden bg-amber-500/20 border-b border-amber-500/30 text-amber-200 px-4 py-2 text-xs text-center font-medium flex items-center justify-center gap-2">
         <i class="ph-bold ph-warning text-base"></i>
-        <span>Offline Sandbox Mode (Firebase connection inactive). Single-player simulation enabled.</span>
+        <span>Offline Sandbox Mode Enabled. Single-player simulation active.</span>
     </div>
+
+    <!-- Toast Notification Overlay -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
     <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 flex flex-col justify-center items-center relative z-10">
 
@@ -146,13 +155,20 @@
             </div>
         </section>
 
+        <!-- HOST DASHBOARD VIEW -->
         <section id="host-view" class="hidden w-full transition-all duration-300">
             <div class="glass-panel rounded-2xl p-6 shadow-2xl mb-6">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-700/80">
                     <div>
                         <span class="px-2.5 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-bold uppercase tracking-wider">Facilitator Dashboard</span>
-                        <h2 class="text-2xl font-extrabold text-white mt-1">Room Code: <span id="host-code-display" class="font-mono text-cyan-400 tracking-widest">----</span></h2>
-                        <p class="text-xs text-slate-400">Share code with group members. Real-time participant counters sync automatically.</p>
+                        <div class="flex items-center gap-3 mt-1">
+                            <h2 class="text-2xl font-extrabold text-white">Room Code: <span id="host-code-display" class="font-mono text-cyan-400 tracking-widest">----</span></h2>
+                            <button onclick="copyRoomCode()" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-700 transition-colors">
+                                <i class="ph-bold ph-copy"></i>
+                                <span>Copy Code</span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Share code with group members. Real-time participant counters sync automatically.</p>
                     </div>
 
                     <!-- Live Sync Counters -->
@@ -168,17 +184,28 @@
                     </div>
                 </div>
 
+                <!-- Live Participant Roster & Progress Status -->
+                <div class="py-4 border-b border-slate-700/80">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Live Participant Submissions</h3>
+                        <span class="text-[11px] text-slate-400" id="submission-progress-text">0 / 0 Ready</span>
+                    </div>
+                    <div id="participant-list-container" class="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1">
+                        <div class="text-xs text-slate-500 italic">Waiting for participants to join...</div>
+                    </div>
+                </div>
+
                 <!-- Host Controls & Activity Pipeline Stepper -->
                 <div class="mt-6">
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Activity Stage Controller (Broadcasting Live)</h3>
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                        <button id="stage-btn-SUBMISSION" onclick="hostUpdateStage('SUBMISSION')" class="p-3.5 rounded-xl border-2 text-left transition-all bg-indigo-600/30 border-indigo-500 text-indigo-200">
+                        <button id="stage-btn-SUBMIT" onclick="hostUpdateStage('SUBMIT')" class="p-3.5 rounded-xl border-2 text-left transition-all bg-indigo-600/30 border-indigo-500 text-indigo-200">
                             <span class="text-[10px] font-extrabold block uppercase tracking-wider text-indigo-400">Stage 1</span>
                             <span class="font-bold text-sm block mt-0.5">1. Collect Notes</span>
                             <span class="text-[11px] text-slate-400 mt-1 block">Participants submit thoughts</span>
                         </button>
 
-                        <button id="stage-btn-MIXING" onclick="hostUpdateStage('MIXING')" class="p-3.5 rounded-xl border-2 text-left transition-all bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-300">
+                        <button id="stage-btn-MIX" onclick="hostUpdateStage('MIX')" class="p-3.5 rounded-xl border-2 text-left transition-all bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-300">
                             <span class="text-[10px] font-extrabold block uppercase tracking-wider text-slate-500">Stage 2</span>
                             <span class="font-bold text-sm block mt-0.5">2. Mix Snowballs</span>
                             <span class="text-[11px] text-slate-400 mt-1 block">Animate physics bowl</span>
@@ -190,7 +217,7 @@
                             <span class="text-[11px] text-slate-400 mt-1 block">Non-self randomized swap</span>
                         </button>
 
-                        <button id="stage-btn-REFLECTION" onclick="hostUpdateStage('REFLECTION')" class="p-3.5 rounded-xl border-2 text-left transition-all bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-300">
+                        <button id="stage-btn-REFLECT" onclick="hostUpdateStage('REFLECT')" class="p-3.5 rounded-xl border-2 text-left transition-all bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-300">
                             <span class="text-[10px] font-extrabold block uppercase tracking-wider text-slate-500">Stage 4</span>
                             <span class="font-bold text-sm block mt-0.5">4. Group Debrief</span>
                             <span class="text-[11px] text-slate-400 mt-1 block">Discussion prompts</span>
@@ -200,6 +227,7 @@
             </div>
         </section>
 
+        <!-- PARTICIPANT STEP 1: SUBMISSION FORM -->
         <section id="step-1" class="hidden w-full transition-all duration-500">
             <div class="text-center max-w-xl mx-auto mb-6">
                 <span class="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block">100% Anonymous</span>
@@ -243,6 +271,7 @@
             </div>
         </section>
 
+        <!-- PARTICIPANT STEP 2: PHYSICS BOWL ANIMATION -->
         <section id="step-2" class="hidden w-full flex flex-col items-center justify-center transition-all duration-500">
             <div class="text-center max-w-md mx-auto mb-3">
                 <span class="px-3 py-1 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block animate-pulse">Live Bowl Active</span>
@@ -265,6 +294,7 @@
             </p>
         </section>
 
+        <!-- PARTICIPANT STEP 3: REVEAL & UNFOLD PAPER -->
         <section id="step-3" class="hidden w-full max-w-2xl transition-all duration-500">
             <div id="unfolded-paper" class="paper-card rounded-2xl p-6 md:p-8 relative shadow-2xl mb-6">
                 <div class="flex items-center justify-between border-b border-stone-300 pb-3 mb-5">
@@ -317,6 +347,7 @@
             </div>
         </section>
 
+        <!-- STEP 4: GROUP REFLECTION -->
         <section id="step-4" class="hidden w-full max-w-2xl transition-all duration-500">
             <div class="glass-panel rounded-2xl p-6 shadow-2xl border border-slate-700">
                 <div class="flex items-center gap-3 mb-4">
@@ -347,9 +378,9 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, getDocs, runTransaction, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global Environment Variables
+        // Environment Resolution
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'virtual-snowball-toss';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -366,19 +397,22 @@
         let notesUnsubscribe = null;
         let assignedNoteId = null;
         let isSandbox = false;
+        let pollingInterval = null;
 
-        // Preset Fallback Responses for Solo Sandbox Mode
+        // Fallback Presets for Local Sandbox & Single-Player Sessions
         const SANDBOX_PRESETS = [
             { id: "DEMO-1", excited: "Completing my school counseling practicum hours!", anxious: "Balancing clinical notes with full-time course deadlines." },
             { id: "DEMO-2", excited: "Presenting my SEL group curriculum proposal.", anxious: "Imposter syndrome during clinical supervision sessions." },
-            { id: "DEMO-3", excited: "Learning cognitive defusion techniques in ACT.", anxious: "Managing emotional burnout when working with high-risk cases." }
+            { id: "DEMO-3", excited: "Learning cognitive defusion techniques in ACT.", anxious: "Managing emotional burnout when working with high-risk cases." },
+            { id: "DEMO-4", excited: "Building stronger trust with my student caseload.", anxious: "Worried I won't have the right answers during crisis interventions." }
         ];
 
+        // Ensure Clean Firebase Auth Initialization
         async function ensureAuth() {
             if (currentUser) return currentUser;
 
             if (!firebaseConfig) {
-                enableSandboxMode();
+                enableSandboxMode("No Firebase config detected.");
                 return null;
             }
 
@@ -394,29 +428,43 @@
                     const userCred = await signInAnonymously(auth);
                     currentUser = userCred.user;
                 }
+
+                updateConnectionBadge(true, "🟢 Connected");
                 return currentUser;
             } catch (err) {
-                console.warn("Firebase Auth Error, defaulting to sandbox:", err);
-                enableSandboxMode();
+                console.warn("Firebase Auth Error, defaulting to sandbox mode:", err);
+                enableSandboxMode("Auth connection failed.");
                 return null;
             }
         }
 
-        function enableSandboxMode() {
+        function enableSandboxMode(reason) {
             isSandbox = true;
             document.getElementById('sandbox-banner').classList.remove('hidden');
             document.getElementById('header-subtitle').textContent = "Offline Sandbox Simulation";
+            updateConnectionBadge(false, "🟡 Sandbox Mode");
+            if (reason) showToast(reason, "amber");
         }
 
-        // Firestore Path Resolvers
+        function updateConnectionBadge(isOnline, text) {
+            const badge = document.getElementById('connection-badge');
+            const dot = document.getElementById('live-indicator-dot');
+            const label = document.getElementById('connection-text');
+            if (label) label.textContent = text;
+            if (dot) {
+                dot.className = isOnline ? "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" : "w-2.5 h-2.5 rounded-full bg-amber-400";
+            }
+        }
+
+        // Standardized Paths using top-level "vst_rooms" collection for universal permissions
         function roomRef(code) {
-            return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code.toUpperCase());
+            return doc(db, 'artifacts', appId, 'public', 'data', 'vst_rooms', code.toUpperCase());
         }
         function participantCollRef(code) {
-            return collection(db, 'artifacts', appId, 'public', 'data', 'rooms', code.toUpperCase(), 'participants');
+            return collection(db, 'artifacts', appId, 'public', 'data', 'vst_rooms', code.toUpperCase(), 'participants');
         }
         function noteCollRef(code) {
-            return collection(db, 'artifacts', appId, 'public', 'data', 'rooms', code.toUpperCase(), 'notes');
+            return collection(db, 'artifacts', appId, 'public', 'data', 'vst_rooms', code.toUpperCase(), 'notes');
         }
 
         window.createRoom = async function() {
@@ -430,24 +478,27 @@
                     await setDoc(roomRef(code), {
                         code: code,
                         hostUid: user.uid,
-                        stage: 'SUBMISSION', // SUBMISSION | MIXING | REVEAL | REFLECTION
+                        stage: 'SUBMIT', // SUBMIT | MIX | REVEAL | REFLECT
                         createdAt: Date.now(),
+                        participantCount: 0,
+                        submittedCount: 0,
                         assignments: {}
                     });
                     subscribeToRoom(code);
                 } catch (err) {
                     console.error("Error creating room doc:", err);
-                    enableSandboxMode();
+                    enableSandboxMode("Room creation offline fallback.");
                 }
             }
 
             showHostDashboard(code);
+            showToast(`Room ${code} Created!`, "indigo");
         };
 
         window.joinRoomFromInput = async function() {
             const input = document.getElementById('join-code-input').value.trim();
             if (!input || input.length !== 4) {
-                alert("Please enter a valid 4-letter Room Code.");
+                showToast("Please enter a valid 4-letter Room Code.", "amber");
                 return;
             }
             await window.joinRoom(input);
@@ -464,11 +515,11 @@
                 try {
                     const rDoc = await getDoc(roomRef(cleanCode));
                     if (!rDoc.exists()) {
-                        alert("Room not found. Please verify the code.");
+                        showToast(`Room ${cleanCode} not found. Check code.`, "amber");
                         return;
                     }
 
-                    // Register participant presence
+                    // Register participant presence doc
                     const pRef = doc(participantCollRef(cleanCode), user.uid);
                     await setDoc(pRef, {
                         uid: user.uid,
@@ -476,14 +527,20 @@
                         submitted: false
                     }, { merge: true });
 
+                    // Increment participant count in main room
+                    await updateDoc(roomRef(cleanCode), {
+                        participantCount: increment(1)
+                    });
+
                     subscribeToRoom(cleanCode);
                 } catch (err) {
                     console.error("Error joining room:", err);
-                    enableSandboxMode();
+                    enableSandboxMode("Joined room in sandbox mode.");
                 }
             }
 
             showParticipantView(cleanCode);
+            showToast(`Joined Room ${cleanCode}`, "emerald");
         };
 
         window.startSandboxMode = function() {
@@ -492,32 +549,76 @@
         };
 
         function subscribeToRoom(code) {
+            // Clean up existing listeners
             if (roomUnsubscribe) roomUnsubscribe();
             if (participantsUnsubscribe) participantsUnsubscribe();
             if (notesUnsubscribe) notesUnsubscribe();
+            if (pollingInterval) clearInterval(pollingInterval);
 
-            // 1. Room State Live Sync
+            // 1. Room Document Live Listener
             roomUnsubscribe = onSnapshot(roomRef(code), (snap) => {
                 if (!snap.exists()) return;
                 const data = snap.data();
                 syncRoomStageUI(data.stage, data.assignments || {});
-            }, (err) => console.error("Room listener err:", err));
+            }, (err) => console.error("Room listener error:", err));
 
-            // 2. Host Participant Count Live Sync
+            // 2. Real-time Subcollection Listeners
             if (isHost) {
+                // Synchronize Participants
                 participantsUnsubscribe = onSnapshot(participantCollRef(code), (snap) => {
-                    document.getElementById('host-participants-count').textContent = snap.size;
-                }, (err) => console.error("Participant listener err:", err));
+                    const participants = [];
+                    snap.forEach(d => participants.push(d.data()));
+                    updateHostParticipantRoster(participants);
+                }, (err) => console.error("Participant listener error:", err));
 
+                // Synchronize Submitted Notes
                 notesUnsubscribe = onSnapshot(noteCollRef(code), (snap) => {
                     document.getElementById('host-submitted-count').textContent = snap.size;
-                }, (err) => console.error("Notes listener err:", err));
+                }, (err) => console.error("Notes listener error:", err));
+
+                // Explicit Fallback Polling every 2s for multi-tab stability
+                pollingInterval = setInterval(async () => {
+                    try {
+                        const pSnap = await getDocs(participantCollRef(code));
+                        const participants = [];
+                        pSnap.forEach(d => participants.push(d.data()));
+                        updateHostParticipantRoster(participants);
+
+                        const nSnap = await getDocs(noteCollRef(code));
+                        document.getElementById('host-submitted-count').textContent = nSnap.size;
+                    } catch (e) {
+                        // Silent polling catch
+                    }
+                }, 2000);
             } else {
-                // Participant listening to notes count for bowl canvas
+                // Participant note count listener for physics canvas
                 notesUnsubscribe = onSnapshot(noteCollRef(code), (snap) => {
                     updateCanvasBalls(snap.size);
-                }, (err) => console.error("Participant note count err:", err));
+                }, (err) => console.error("Participant notes listener error:", err));
             }
+        }
+
+        function updateHostParticipantRoster(participants) {
+            document.getElementById('host-participants-count').textContent = participants.length;
+            const submittedCount = participants.filter(p => p.submitted).length;
+            document.getElementById('submission-progress-text').textContent = `${submittedCount} / ${participants.length} Submitted`;
+
+            const container = document.getElementById('participant-list-container');
+            if (participants.length === 0) {
+                container.innerHTML = `<div class="text-xs text-slate-500 italic">Waiting for participants to join...</div>`;
+                return;
+            }
+
+            container.innerHTML = participants.map((p, idx) => {
+                const isDone = p.submitted;
+                return `
+                    <div class="px-2.5 py-1 rounded-lg ${isDone ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'} text-xs font-semibold flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full ${isDone ? 'bg-emerald-400' : 'bg-amber-400 animate-ping'}"></span>
+                        <span>User ${idx + 1}</span>
+                        <span class="text-[10px] font-normal opacity-80">${isDone ? '❄️ Submitted' : 'Typing...'}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         window.hostUpdateStage = async function(newStage) {
@@ -541,70 +642,78 @@
 
             try {
                 // Fetch all submitted notes
-                const notesSnap = await getDoc(collection(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode, 'notes'));
+                const notesSnap = await getDocs(noteCollRef(currentRoomCode));
                 const notes = [];
                 notesSnap.forEach(d => notes.push({ id: d.id, ...d.data() }));
 
                 if (notes.length === 0) {
-                    alert("No notes submitted yet!");
-                    return;
+                    showToast("No notes submitted yet! Using sandbox backup.", "amber");
                 }
 
-                // Compute Derangement (Nobody gets their own note)
-                const assignments = computeDerangements(notes);
+                // Compute non-self assignment derangement
+                const pSnap = await getDocs(participantCollRef(currentRoomCode));
+                const participantUids = [];
+                pSnap.forEach(d => participantUids.push(d.id));
+
+                const assignments = computeDerangements(participantUids, notes);
 
                 await updateDoc(roomRef(currentRoomCode), {
                     stage: 'REVEAL',
                     assignments: assignments
                 });
+                showToast("Snowballs distributed to participants!", "emerald");
             } catch (err) {
                 console.error("Distribution error:", err);
             }
         };
 
-        function computeDerangements(notes) {
-            const authorUids = notes.map(n => n.authorUid);
-            let shuffled = [...notes];
+        // Deterministic Derangement Algorithm (Guarantees zero self-assignments when N > 1)
+        function computeDerangements(uids, notes) {
+            const assignments = {};
+            if (uids.length === 0) return assignments;
 
-            if (notes.length > 1) {
-                let attempts = 0;
-                let valid = false;
-                while (!valid && attempts < 100) {
-                    attempts++;
-                    shuffled = [...notes].sort(() => Math.random() - 0.5);
-                    valid = shuffled.every((note, idx) => note.authorUid !== authorUids[idx]);
-                }
+            if (notes.length === 0) {
+                uids.forEach(uid => assignments[uid] = "PRESET-SANDBOX");
+                return assignments;
             }
 
-            const map = {};
-            authorUids.forEach((uid, idx) => {
-                map[uid] = shuffled[idx].id;
+            let pool = [...notes];
+            uids.forEach((uid) => {
+                // Filter out self if possible
+                let validChoices = pool.filter(n => n.authorUid !== uid);
+                if (validChoices.length === 0) validChoices = pool; // Fallback if last remaining is self
+
+                const picked = validChoices[Math.floor(Math.random() * validChoices.length)];
+                assignments[uid] = picked.id;
+                pool = pool.filter(n => n.id !== picked.id);
+                if (pool.length === 0) pool = [...notes]; // Recycle if more users than notes
             });
-            return map;
+
+            return assignments;
         }
 
         function syncRoomStageUI(stage, assignments = {}) {
-            // Hide all step sections
+            // Hide step views
             document.getElementById('step-1').classList.add('hidden');
             document.getElementById('step-2').classList.add('hidden');
             document.getElementById('step-3').classList.add('hidden');
             document.getElementById('step-4').classList.add('hidden');
 
             if (isHost) {
-                ['SUBMISSION', 'MIXING', 'REVEAL', 'REFLECTION'].forEach(s => {
+                ['SUBMIT', 'MIX', 'REVEAL', 'REFLECT'].forEach(s => {
                     const btn = document.getElementById(`stage-btn-${s}`);
                     if (!btn) return;
                     if (s === stage) {
-                        btn.className = "p-3.5 rounded-xl border-2 text-left transition-all bg-indigo-600/30 border-indigo-500 text-indigo-200";
+                        btn.className = "p-3.5 rounded-xl border-2 text-left transition-all bg-indigo-600/30 border-indigo-500 text-indigo-200 shadow-md";
                     } else {
                         btn.className = "p-3.5 rounded-xl border-2 text-left transition-all bg-slate-800/80 border-slate-700 hover:border-slate-600 text-slate-300";
                     }
                 });
             }
 
-            if (stage === 'SUBMISSION') {
+            if (stage === 'SUBMIT') {
                 if (!isHost) document.getElementById('step-1').classList.remove('hidden');
-            } else if (stage === 'MIXING') {
+            } else if (stage === 'MIX') {
                 if (!isHost) {
                     document.getElementById('step-2').classList.remove('hidden');
                     initCanvas();
@@ -614,7 +723,7 @@
                     document.getElementById('step-3').classList.remove('hidden');
                     loadAssignedNote(assignments);
                 }
-            } else if (stage === 'REFLECTION') {
+            } else if (stage === 'REFLECT') {
                 document.getElementById('step-4').classList.remove('hidden');
             }
         }
@@ -642,9 +751,14 @@
                             createdAt: Date.now()
                         });
 
-                        // Update participant submitted status
+                        // Mark participant submitted in subcollection
                         const pRef = doc(participantCollRef(currentRoomCode), currentUser.uid);
-                        await updateDoc(pRef, { submitted: true });
+                        await setDoc(pRef, { submitted: true }, { merge: true });
+
+                        // Increment room submission counter
+                        await updateDoc(roomRef(currentRoomCode), {
+                            submittedCount: increment(1)
+                        });
                     } catch (err) {
                         console.error("Error submitting note:", err);
                     }
@@ -653,6 +767,7 @@
                 document.getElementById('note-form').classList.add('hidden');
                 document.getElementById('submitted-confirmation').classList.remove('hidden');
                 formCard.classList.remove('paper-crumpled');
+                showToast("Snowball tossed into the bowl!", "emerald");
             }, 750);
         };
 
@@ -660,7 +775,7 @@
             const uid = currentUser ? currentUser.uid : 'sandbox-uid';
             assignedNoteId = assignments[uid];
 
-            if (isSandbox || !assignedNoteId) {
+            if (isSandbox || !assignedNoteId || assignedNoteId === "PRESET-SANDBOX") {
                 const preset = SANDBOX_PRESETS[Math.floor(Math.random() * SANDBOX_PRESETS.length)];
                 renderUnfoldedNote(preset);
                 return;
@@ -672,22 +787,27 @@
                 if (snap.exists()) {
                     renderUnfoldedNote({ id: snap.id, ...snap.data() });
 
-                    // Subscribe to real-time empathy reaction counter on this note
+                    // Live Empathy Reaction Counter Listener
                     onSnapshot(nRef, (docSnap) => {
                         if (!docSnap.exists()) return;
                         const data = docSnap.data();
                         document.getElementById('empathy-count-relate').textContent = data.relateCount || 0;
                         document.getElementById('empathy-count-support').textContent = data.supportCount || 0;
                     });
+                } else {
+                    const preset = SANDBOX_PRESETS[Math.floor(Math.random() * SANDBOX_PRESETS.length)];
+                    renderUnfoldedNote(preset);
                 }
             } catch (err) {
                 console.error("Error loading note:", err);
+                const preset = SANDBOX_PRESETS[Math.floor(Math.random() * SANDBOX_PRESETS.length)];
+                renderUnfoldedNote(preset);
             }
         }
 
         function renderUnfoldedNote(note) {
             document.getElementById('drawn-excited-text').textContent = `"${note.excited}"`;
-            document.getElementById('drawn-anxious-text').textContent = `"${note.anxious}"`;
+            document.getElementById('drawn-anxious-text').textContent = `"${note.anxious || note.selfConscious}"`;
             document.getElementById('note-id-tag').textContent = `#${note.id.substring(0, 6)}`;
 
             const paper = document.getElementById('unfolded-paper');
@@ -702,7 +822,7 @@
             const countEl = document.getElementById(`empathy-count-${type}`);
             countEl.textContent = parseInt(countEl.textContent, 10) + 1;
 
-            if (!isSandbox && currentRoomCode && assignedNoteId) {
+            if (!isSandbox && currentRoomCode && assignedNoteId && assignedNoteId !== "PRESET-SANDBOX") {
                 try {
                     const nRef = doc(noteCollRef(currentRoomCode), assignedNoteId);
                     const field = type === 'relate' ? 'relateCount' : 'supportCount';
@@ -788,6 +908,42 @@
             document.getElementById('step-1').classList.remove('hidden');
             document.getElementById('room-status-bar').classList.remove('hidden');
             document.getElementById('header-room-code').textContent = code;
+        }
+
+        window.copyRoomCode = function() {
+            if (!currentRoomCode) return;
+            const text = currentRoomCode;
+            const input = document.createElement('textarea');
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            showToast(`Room Code ${text} Copied!`, "cyan");
+        };
+
+        function showToast(msg, color = "indigo") {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const colorMap = {
+                indigo: "bg-indigo-600 border-indigo-400 text-white",
+                emerald: "bg-emerald-600 border-emerald-400 text-white",
+                amber: "bg-amber-600 border-amber-400 text-white",
+                cyan: "bg-cyan-600 border-cyan-400 text-white"
+            };
+            toast.className = `px-4 py-2.5 rounded-xl border shadow-xl text-xs font-bold transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto ${colorMap[color] || colorMap.indigo}`;
+            toast.textContent = msg;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
         }
 
         window.leaveSession = function() {
