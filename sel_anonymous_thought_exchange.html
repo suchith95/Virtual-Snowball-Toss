@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEL Anonymous Thought Exchange (Multiplayer)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 50%, #faf5ff 100%);
+            min-height: 100vh;
+        }
+
+        .handwritten {
+            font-family: 'Caveat', cursive;
+        }
+
+        .paper-card {
+            background-color: #fcfbf9;
+            background-image: radial-gradient(#e5e7eb 0.75px, transparent 0.75px);
+            background-size: 12px 12px;
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(229, 231, 235, 0.8);
+        }
+
+        .paper-crumpled {
+            animation: crumple 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+        }
+
+        @keyframes crumple {
+            0% { transform: scale(1) rotate(0deg); border-radius: 12px; }
+            40% { transform: scale(0.6) rotate(15deg); border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; filter: contrast(1.2) brightness(0.9); }
+            80% { transform: scale(0.2) rotate(-30deg); border-radius: 50%; filter: contrast(1.8) brightness(0.7); }
+            100% { transform: scale(0) rotate(180deg); opacity: 0; }
+        }
+
+        .paper-unfold {
+            animation: unfold 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes unfold {
+            0% { transform: scale(0.1) rotate(-180deg); opacity: 0; filter: blur(8px); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; filter: blur(0px); }
+        }
+
+        .bowl-shadow {
+            box-shadow: inset 0 -15px 25px rgba(0,0,0,0.06), 0 20px 30px -10px rgba(0,0,0,0.1);
+        }
+
+        /* Glass pill badges */
+        .glass-pill {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(229, 231, 235, 0.6);
+        }
+    </style>
+</head>
+<body class="text-slate-800 flex flex-col min-h-screen relative overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="w-full py-3.5 px-4 md:px-8 flex items-center justify-between border-b border-slate-200/60 bg-white/70 backdrop-blur-md sticky top-0 z-40">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-sky-200">
+                <i class="ph-bold ph-hand-heart text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="font-extrabold text-base md:text-lg text-slate-800 tracking-tight leading-none">Thought Exchange</h1>
+                <p class="text-xs text-slate-500 font-medium mt-0.5" id="header-status">Multi-User SEL Activity</p>
+            </div>
+        </div>
+
+        <div id="room-status-bar" class="hidden flex items-center gap-2">
+            <div class="glass-pill px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2 text-slate-700">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Room: <strong id="header-room-code" class="font-mono text-indigo-600 text-sm tracking-wider">----</strong></span>
+            </div>
+            <button id="leave-room-btn" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors text-xs flex items-center gap-1" title="Leave Session">
+                <i class="ph-bold ph-sign-out text-base"></i>
+                <span class="hidden sm:inline">Leave</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 flex flex-col justify-center items-center relative z-10">
+
+        <!-- LOBBY / ROOM SELECTION -->
+        <section id="lobby-view" class="w-full max-w-md transition-all duration-300">
+            <div class="text-center mb-6">
+                <span class="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block">Interactive SEL</span>
+                <h2 class="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Join or Host a Room</h2>
+                <p class="text-slate-600 text-xs md:text-sm mt-1">Connect with your class or group across multiple devices in real-time.</p>
+            </div>
+
+            <div class="bg-white/80 backdrop-blur-md rounded-2xl p-6 border border-slate-200/80 shadow-xl space-y-5">
+                <!-- Join Room Form -->
+                <div class="space-y-3">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Join Existing Session</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="join-code-input" maxlength="4" placeholder="ROOM CODE (e.g. ABCD)" class="flex-1 p-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 uppercase font-mono tracking-widest text-center font-bold text-slate-800 placeholder-slate-400 text-sm">
+                        <button id="join-room-btn" class="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all text-sm flex items-center gap-1.5">
+                            <span>Join</span>
+                            <i class="ph-bold ph-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="relative flex py-1 items-center">
+                    <div class="flex-grow border-t border-slate-200"></div>
+                    <span class="flex-shrink mx-3 text-slate-400 text-xs uppercase font-bold">Or</span>
+                    <div class="flex-grow border-t border-slate-200"></div>
+                </div>
+
+                <!-- Host Room Action -->
+                <button id="create-room-btn" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 transition-all text-sm flex items-center justify-center gap-2">
+                    <i class="ph-bold ph-chalkboard-teacher text-lg"></i>
+                    <span>Create Host Session (Teacher / Facilitator)</span>
+                </button>
+
+                <button id="solo-demo-btn" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-xl transition-all text-xs flex items-center justify-center gap-1.5">
+                    <i class="ph-bold ph-user"></i>
+                    <span>Try Offline Demo Mode</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- HOST DASHBOARD VIEW -->
+        <section id="host-view" class="hidden w-full transition-all duration-300">
+            <div class="bg-white/90 backdrop-blur-md rounded-2xl p-6 border border-slate-200/80 shadow-xl mb-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                    <div>
+                        <span class="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider">Host Control Dashboard</span>
+                        <h2 class="text-2xl font-extrabold text-slate-900 mt-1">Room Code: <span id="host-code-display" class="font-mono text-indigo-600 tracking-widest">----</span></h2>
+                        <p class="text-xs text-slate-500">Share this code with participants to join on their devices.</p>
+                    </div>
+
+                    <!-- Live Sync Counters -->
+                    <div class="flex items-center gap-3">
+                        <div class="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200/70 text-center">
+                            <span class="block text-2xl font-extrabold text-indigo-600 leading-none" id="host-participants-count">0</span>
+                            <span class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Connected</span>
+                        </div>
+                        <div class="bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200/70 text-center">
+                            <span class="block text-2xl font-extrabold text-emerald-600 leading-none" id="host-submitted-count">0</span>
+                            <span class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Submitted</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stage Controller Buttons -->
+                <div class="mt-6">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Advance Activity Stage for Everyone</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <button id="stage-btn-1" onclick="hostSetStage('submission')" class="p-4 rounded-xl border-2 text-left transition-all bg-indigo-50 border-indigo-500 text-indigo-900">
+                            <span class="text-xs font-extrabold block uppercase tracking-wider text-indigo-600">Stage 1</span>
+                            <span class="font-bold text-sm block mt-0.5">1. Submissions Open</span>
+                            <span class="text-xs text-slate-500 mt-1 block">Participants write notes</span>
+                        </button>
+                        <button id="stage-btn-2" onclick="hostSetStage('mixing')" class="p-4 rounded-xl border-2 text-left transition-all bg-white border-slate-200 hover:border-slate-300 text-slate-700">
+                            <span class="text-xs font-extrabold block uppercase tracking-wider text-slate-400">Stage 2</span>
+                            <span class="font-bold text-sm block mt-0.5">2. Mix Paper Bowl</span>
+                            <span class="text-xs text-slate-500 mt-1 block">Crumple notes & swirl bowl</span>
+                        </button>
+                        <button id="stage-btn-3" onclick="hostSetStage('distribute')" class="p-4 rounded-xl border-2 text-left transition-all bg-white border-slate-200 hover:border-slate-300 text-slate-700">
+                            <span class="text-xs font-extrabold block uppercase tracking-wider text-slate-400">Stage 3</span>
+                            <span class="font-bold text-sm block mt-0.5">3. Unfold Peer Notes</span>
+                            <span class="text-xs text-slate-500 mt-1 block">Distribute notes randomly</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PARTICIPANT STEP 1: FORM INPUT -->
+        <section id="step-1" class="hidden w-full transition-all duration-500 ease-out">
+            <div class="text-center max-w-xl mx-auto mb-6">
+                <span class="px-3 py-1 bg-sky-100 text-sky-700 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block">100% Anonymous</span>
+                <h2 class="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Share your thought</h2>
+                <p class="text-slate-600 text-xs md:text-sm mt-1">Your response will be crumpled and randomly swapped with a peer.</p>
+            </div>
+
+            <div id="note-form-card" class="paper-card rounded-2xl p-6 md:p-8 relative transition-all duration-500">
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-amber-100/80 backdrop-blur-sm border border-amber-200/50 rotate-1 shadow-sm rounded-sm pointer-events-none"></div>
+
+                <form id="note-form" class="space-y-5">
+                    <div>
+                        <label for="excited-text" class="flex items-center gap-2 text-xs md:text-sm font-bold text-emerald-800 mb-1.5">
+                            <span class="text-base">🌟</span>
+                            What is 1 thing you are excited or hopeful about?
+                        </label>
+                        <textarea id="excited-text" required rows="3" maxlength="280" placeholder="e.g., Weekend sports game, learning a new song, seeing family..." class="w-full p-3 rounded-xl border border-slate-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200 transition-all text-slate-800 text-sm resize-none bg-white/80 placeholder-slate-400"></textarea>
+                    </div>
+
+                    <div>
+                        <label for="anxious-text" class="flex items-center gap-2 text-xs md:text-sm font-bold text-amber-800 mb-1.5">
+                            <span class="text-base">💭</span>
+                            What is 1 thing you feel self-conscious or anxious about?
+                        </label>
+                        <textarea id="anxious-text" required rows="3" maxlength="280" placeholder="e.g., Speaking up in class, fitting in, upcoming exams..." class="w-full p-3 rounded-xl border border-slate-200 focus:border-amber-400 focus:ring-2 focus:ring-amber-200 transition-all text-slate-800 text-sm resize-none bg-white/80 placeholder-slate-400"></textarea>
+                    </div>
+
+                    <button type="submit" id="submit-btn" class="w-full py-3.5 px-6 bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2">
+                        <span>Crumple & Toss Into Bowl</span>
+                        <i class="ph-bold ph-paper-plane-tilt text-lg"></i>
+                    </button>
+                </form>
+
+                <div id="submitted-confirmation" class="hidden text-center py-8 space-y-3">
+                    <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl mx-auto">
+                        <i class="ph-bold ph-check"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Your note is in the bowl!</h3>
+                    <p class="text-xs text-slate-500">Waiting for the facilitator to move everyone to the mixing phase...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- PARTICIPANT STEP 2: CANVAS BOWL MIXING -->
+        <section id="step-2" class="hidden w-full flex flex-col items-center justify-center transition-all duration-500">
+            <div class="text-center max-w-md mx-auto mb-3">
+                <span class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block animate-pulse">Mixing Bowl Active</span>
+                <h2 class="text-2xl font-extrabold text-slate-800">Swirl & Mix Thoughts!</h2>
+                <p class="text-xs text-slate-500 mt-1">All participant notes are crumpled together in the bowl.</p>
+            </div>
+
+            <!-- Physics Bowl Canvas -->
+            <div class="relative w-full max-w-lg h-64 md:h-72 my-2 flex items-center justify-center">
+                <div class="absolute inset-0 rounded-b-[120px] rounded-t-[30px] bg-gradient-to-b from-white/90 via-sky-50/60 to-indigo-100/80 border-4 border-white shadow-2xl bowl-shadow backdrop-blur-md overflow-hidden">
+                    <div class="absolute top-3 left-6 right-6 h-5 rounded-full bg-gradient-to-b from-white/80 to-transparent pointer-events-none"></div>
+                </div>
+
+                <canvas id="bowl-canvas" class="absolute inset-0 w-full h-full z-10 cursor-grab active:cursor-grabbing"></canvas>
+            </div>
+
+            <p class="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                <i class="ph-bold ph-hand-swipe text-amber-500"></i>
+                <span>Drag cursor/finger across the bowl to swirl paper snowballs</span>
+            </p>
+        </section>
+
+        <!-- PARTICIPANT STEP 3: UNFOLD & REFLECTION -->
+        <section id="step-3" class="hidden w-full max-w-2xl transition-all duration-500">
+            <div id="unfolded-paper" class="paper-card rounded-2xl p-6 md:p-8 relative shadow-2xl mb-6 border border-amber-200/60">
+                <div class="flex items-center justify-between border-b border-slate-200/80 pb-3 mb-5">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+                        <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Peer Thought Note</span>
+                    </div>
+                    <span id="note-id-tag" class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-semibold">#NOTE-01</span>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="bg-emerald-50/70 rounded-xl p-4 border border-emerald-100">
+                        <div class="flex items-center gap-1.5 mb-1 text-xs font-bold uppercase tracking-wider text-emerald-800">
+                            <span>🌟</span>
+                            <span>Excited or Hopeful About:</span>
+                        </div>
+                        <p id="drawn-excited-text" class="handwritten text-xl text-slate-800 leading-relaxed">
+                            "Loading..."
+                        </p>
+                    </div>
+
+                    <div class="bg-amber-50/70 rounded-xl p-4 border border-amber-100">
+                        <div class="flex items-center gap-1.5 mb-1 text-xs font-bold uppercase tracking-wider text-amber-800">
+                            <span>💭</span>
+                            <span>Self-Conscious or Anxious About:</span>
+                        </div>
+                        <p id="drawn-anxious-text" class="handwritten text-xl text-slate-800 leading-relaxed">
+                            "Loading..."
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Real-Time Empathy Reactions -->
+                <div class="mt-6 pt-4 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">Send silent empathy to this note:</span>
+                    <div class="flex items-center gap-2">
+                        <button id="empathy-btn-1" onclick="sendEmpathy('relate')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-rose-300 rounded-full text-xs font-medium text-slate-700 hover:text-rose-600 transition-all flex items-center gap-1.5 shadow-sm active:scale-95">
+                            <span>❤️</span>
+                            <span>I relate to this</span>
+                            <span id="empathy-count-relate" class="font-bold text-slate-400">0</span>
+                        </button>
+                        <button id="empathy-btn-2" onclick="sendEmpathy('support')" class="px-3 py-1.5 bg-white border border-slate-200 hover:border-amber-300 rounded-full text-xs font-medium text-slate-700 hover:text-amber-600 transition-all flex items-center gap-1.5 shadow-sm active:scale-95">
+                            <span>💪</span>
+                            <span>You got this!</span>
+                            <span id="empathy-count-support" class="font-bold text-slate-400">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reflection Prompts -->
+            <div class="bg-white/80 backdrop-blur-md rounded-2xl p-5 border border-slate-200/80 shadow-md">
+                <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                    <i class="ph-bold ph-lightbulb text-amber-500 text-lg"></i>
+                    <span>Group Discussion Reflection</span>
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-700">
+                        <span class="font-bold text-slate-900 block mb-0.5">🔍 Perspective:</span>
+                        How does reading this peer's note change how you view your own daily anxieties?
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-slate-700">
+                        <span class="font-bold text-slate-900 block mb-0.5">🤝 Community:</span>
+                        What is one supportive thing our group can do to foster safety this week?
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Firebase Standard Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection, query, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sel-thought-exchange';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+
+        // Session State
+        let currentRoomCode = null;
+        let isHost = false;
+        let roomUnsubscribe = null;
+        let notesUnsubscribe = null;
+        let assignedNoteId = null;
+        let isDemoMode = false;
+
+        // Preset Fallback Responses for Solo / Offline testing
+        const PRESETS = [
+            { id: "DEMO-1", excited: "Making the soccer team after practicing all summer!", anxious: "Speaking up in English class when I don't know the answer." },
+            { id: "DEMO-2", excited: "Going on a weekend trip with my family.", anxious: "Feeling like everyone else has their high school plan figured out." },
+            { id: "DEMO-3", excited: "Learning how to play acoustic guitar.", anxious: "Failing my upcoming chemistry exam." }
+        ];
+
+        async function initFirebase() {
+            if (!firebaseConfig) {
+                console.warn("No Firebase config found. Running in Offline Demo Mode.");
+                return false;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                return true;
+            } catch (err) {
+                console.error("Firebase Auth Error:", err);
+                return false;
+            }
+        }
+
+        // Firestore Path Helpers
+        function getRoomDocRef(roomCode) {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase());
+        }
+
+        function getNotesCollRef(roomCode) {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase(), 'notes');
+        }
+
+        // --- ROOM MANAGEMENT LOGIC ---
+        window.createRoom = async function() {
+            const hasFirebase = await initFirebase();
+            const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+            currentRoomCode = roomCode;
+            isHost = true;
+
+            if (hasFirebase && currentUser) {
+                const roomRef = getRoomDocRef(roomCode);
+                await setDoc(roomRef, {
+                    code: roomCode,
+                    hostUid: currentUser.uid,
+                    stage: 'submission', // submission | mixing | distribute
+                    createdAt: Date.now(),
+                    assignments: {}
+                });
+                listenToRoom(roomCode);
+            } else {
+                startDemoMode(roomCode, true);
+            }
+
+            showHostView(roomCode);
+        };
+
+        window.joinRoom = async function(code) {
+            if (!code || code.length !== 4) {
+                alert("Please enter a valid 4-letter Room Code.");
+                return;
+            }
+
+            const cleanCode = code.toUpperCase();
+            const hasFirebase = await initFirebase();
+
+            if (hasFirebase && currentUser) {
+                const roomRef = getRoomDocRef(cleanCode);
+                const roomSnap = await getDoc(roomRef);
+
+                if (!roomSnap.exists()) {
+                    alert("Room not found. Please check the 4-letter code.");
+                    return;
+                }
+
+                currentRoomCode = cleanCode;
+                isHost = false;
+                listenToRoom(cleanCode);
+            } else {
+                startDemoMode(cleanCode, false);
+            }
+
+            showParticipantView(cleanCode);
+        };
+
+        function listenToRoom(roomCode) {
+            if (roomUnsubscribe) roomUnsubscribe();
+            if (notesUnsubscribe) notesUnsubscribe();
+
+            const roomRef = getRoomDocRef(roomCode);
+            const notesRef = getNotesCollRef(roomCode);
+
+            // Listen to Room Meta
+            roomUnsubscribe = onSnapshot(roomRef, (snapshot) => {
+                if (!snapshot.exists()) return;
+                const roomData = snapshot.data();
+
+                // Update UI stage based on host's room stage state
+                syncStageUI(roomData.stage, roomData.assignments);
+            }, (error) => console.error("Room sync error:", error));
+
+            // Listen to Notes Collection
+            notesUnsubscribe = onSnapshot(notesRef, (snapshot) => {
+                const notes = [];
+                snapshot.forEach(doc => notes.push({ id: doc.id, ...doc.data() }));
+
+                if (isHost) {
+                    document.getElementById('host-submitted-count').textContent = notes.length;
+                }
+
+                // If currently drawn note, update its real-time empathy counts
+                if (assignedNoteId) {
+                    const currentDrawn = notes.find(n => n.id === assignedNoteId);
+                    if (currentDrawn) {
+                        document.getElementById('empathy-count-relate').textContent = currentDrawn.relateCount || 0;
+                        document.getElementById('empathy-count-support').textContent = currentDrawn.supportCount || 0;
+                    }
+                }
+
+                updateCanvasBalls(notes.length);
+            }, (error) => console.error("Notes sync error:", error));
+        }
+
+        // Host Stage Controls
+        window.hostSetStage = async function(stageName) {
+            if (isDemoMode) {
+                syncStageUI(stageName, {});
+                return;
+            }
+
+            const roomRef = getRoomDocRef(currentRoomCode);
+
+            if (stageName === 'distribute') {
+                // Compute Derangement / Non-self note assignments before advancing
+                const notesRef = getNotesCollRef(currentRoomCode);
+                const notesSnap = await getDoc(notesRef); // Simple query without complex filters
+                const notes = [];
+                notesSnap.forEach(d => notes.push({ id: d.id, ...d.data() }));
+
+                const assignments = computeDerangements(notes);
+                await updateDoc(roomRef, {
+                    stage: stageName,
+                    assignments: assignments
+                });
+            } else {
+                await updateDoc(roomRef, { stage: stageName });
+            }
+        };
+
+        // Derangement algorithm (Ensures nobody gets their own note unless N=1)
+        function computeDerangements(notes) {
+            if (notes.length === 0) return {};
+            const userIds = notes.map(n => n.authorUid);
+            let shuffled = [...notes];
+
+            if (notes.length > 1) {
+                let attempts = 0;
+                let valid = false;
+                while (!valid && attempts < 100) {
+                    attempts++;
+                    shuffled = [...notes].sort(() => Math.random() - 0.5);
+                    valid = shuffled.every((note, idx) => note.authorUid !== userIds[idx]);
+                }
+            }
+
+            const map = {};
+            userIds.forEach((uid, idx) => {
+                map[uid] = shuffled[idx].id;
+            });
+            return map;
+        }
+
+        function syncStageUI(stage, assignments = {}) {
+            document.getElementById('step-1').classList.add('hidden');
+            document.getElementById('step-2').classList.add('hidden');
+            document.getElementById('step-3').classList.add('hidden');
+
+            if (isHost) {
+                // Highlight Host Stage Buttons
+                ['submission', 'mixing', 'distribute'].forEach((s, idx) => {
+                    const btn = document.getElementById(`stage-btn-${idx+1}`);
+                    if (s === stage) {
+                        btn.className = "p-4 rounded-xl border-2 text-left transition-all bg-indigo-50 border-indigo-500 text-indigo-900";
+                    } else {
+                        btn.className = "p-4 rounded-xl border-2 text-left transition-all bg-white border-slate-200 hover:border-slate-300 text-slate-700";
+                    }
+                });
+            }
+
+            if (stage === 'submission') {
+                if (!isHost) document.getElementById('step-1').classList.remove('hidden');
+            } else if (stage === 'mixing') {
+                if (!isHost) {
+                    document.getElementById('step-2').classList.remove('hidden');
+                    initCanvas();
+                }
+            } else if (stage === 'distribute') {
+                if (!isHost) {
+                    document.getElementById('step-3').classList.remove('hidden');
+                    loadAssignedNote(assignments);
+                }
+            }
+        }
+
+        async function loadAssignedNote(assignments) {
+            if (!currentUser && !isDemoMode) return;
+            const uid = currentUser ? currentUser.uid : 'demo-user';
+            assignedNoteId = assignments[uid];
+
+            if (isDemoMode || !assignedNoteId) {
+                // Fallback demo note
+                const preset = PRESETS[Math.floor(Math.random() * PRESETS.length)];
+                displayNote(preset);
+                return;
+            }
+
+            const noteDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode, 'notes', assignedNoteId);
+            const snap = await getDoc(noteDocRef);
+            if (snap.exists()) {
+                displayNote({ id: snap.id, ...snap.data() });
+            }
+        }
+
+        function displayNote(note) {
+            document.getElementById('drawn-excited-text').textContent = `"${note.excited}"`;
+            document.getElementById('drawn-anxious-text').textContent = `"${note.anxious}"`;
+            document.getElementById('note-id-tag').textContent = `#${note.id.substring(0, 6)}`;
+
+            const paper = document.getElementById('unfolded-paper');
+            paper.classList.remove('paper-unfold');
+            void paper.offsetWidth;
+            paper.classList.add('paper-unfold');
+
+            confetti({ particleCount: 30, spread: 60, origin: { y: 0.6 } });
+        }
+
+        // Form Submit
+        document.getElementById('note-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const excited = document.getElementById('excited-text').value.trim();
+            const anxious = document.getElementById('anxious-text').value.trim();
+
+            if (!excited || !anxious) return;
+
+            const noteFormCard = document.getElementById('note-form-card');
+            noteFormCard.classList.add('paper-crumpled');
+
+            setTimeout(async () => {
+                if (!isDemoMode && db && currentUser && currentRoomCode) {
+                    const notesRef = getNotesCollRef(currentRoomCode);
+                    const noteDoc = doc(notesRef, currentUser.uid);
+                    await setDoc(noteDoc, {
+                        authorUid: currentUser.uid,
+                        excited: excited,
+                        anxious: anxious,
+                        relateCount: 0,
+                        supportCount: 0,
+                        createdAt: Date.now()
+                    });
+                }
+
+                document.getElementById('note-form').classList.add('hidden');
+                document.getElementById('submitted-confirmation').classList.remove('hidden');
+                noteFormCard.classList.remove('paper-crumpled');
+            }, 750);
+        });
+
+        // Real-Time Empathy Reaction
+        window.sendEmpathy = async function(type) {
+            const countEl = document.getElementById(`empathy-count-${type}`);
+            let val = parseInt(countEl.textContent, 10) + 1;
+            countEl.textContent = val;
+
+            if (!isDemoMode && db && currentRoomCode && assignedNoteId) {
+                const noteRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomCode, 'notes', assignedNoteId);
+                const field = type === 'relate' ? 'relateCount' : 'supportCount';
+                await runTransaction(db, async (transaction) => {
+                    const sfDoc = await transaction.get(noteRef);
+                    if (!sfDoc.exists()) return;
+                    const newCount = (sfDoc.data()[field] || 0) + 1;
+                    transaction.update(noteRef, { [field]: newCount });
+                });
+            }
+        };
+
+        let canvas, ctx, balls = [];
+        class PaperBall {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.radius = 14 + Math.random() * 4;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.color = ['#f8fafc', '#fef3c7', '#e0f2fe', '#f0fdf4'][Math.floor(Math.random() * 4)];
+            }
+            update(w, h) {
+                this.x += this.vx; this.y += this.vy;
+                this.vx *= 0.98; this.vy *= 0.98; this.vy += 0.1;
+                const dx = this.x - w / 2, dy = this.y - h * 0.35;
+                if (Math.sqrt(dx*dx + dy*dy) + this.radius > w * 0.4) {
+                    const angle = Math.atan2(dy, dx);
+                    this.x = w / 2 + Math.cos(angle) * (w * 0.4 - this.radius);
+                    this.y = h * 0.35 + Math.sin(angle) * (w * 0.4 - this.radius);
+                    this.vx *= -0.6; this.vy *= -0.6;
+                }
+            }
+            draw(c) {
+                c.save(); c.translate(this.x, this.y); c.rotate(this.rotation);
+                c.beginPath(); c.arc(0, 0, this.radius, 0, Math.PI * 2);
+                c.fillStyle = this.color; c.fill();
+                c.strokeStyle = '#cbd5e1'; c.lineWidth = 1.5; c.stroke();
+                c.restore();
+            }
+        }
+
+        function initCanvas() {
+            canvas = document.getElementById('bowl-canvas');
+            if (!canvas) return;
+            ctx = canvas.getContext('2d');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width; canvas.height = rect.height;
+            updateCanvasBalls(6);
+            animateCanvas();
+        }
+
+        function updateCanvasBalls(count) {
+            if (!canvas) return;
+            balls = [];
+            const num = Math.min(Math.max(count, 5), 25);
+            for(let i = 0; i < num; i++) {
+                balls.push(new PaperBall(canvas.width / 2 + (Math.random() - 0.5) * 100, canvas.height / 2));
+            }
+        }
+
+        function animateCanvas() {
+            if (!ctx || !canvas) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            balls.forEach(b => { b.update(canvas.width, canvas.height); b.draw(ctx); });
+            requestAnimationFrame(animateCanvas);
+        }
+
+        // View Helpers
+        function showHostView(code) {
+            document.getElementById('lobby-view').classList.add('hidden');
+            document.getElementById('host-view').classList.remove('hidden');
+            document.getElementById('room-status-bar').classList.remove('hidden');
+            document.getElementById('header-room-code').textContent = code;
+            document.getElementById('host-code-display').textContent = code;
+        }
+
+        function showParticipantView(code) {
+            document.getElementById('lobby-view').classList.add('hidden');
+            document.getElementById('step-1').classList.remove('hidden');
+            document.getElementById('room-status-bar').classList.remove('hidden');
+            document.getElementById('header-room-code').textContent = code;
+        }
+
+        function startDemoMode(code, host) {
+            isDemoMode = true;
+            currentRoomCode = code;
+            isHost = host;
+            document.getElementById('header-status').textContent = "Offline Demo Mode";
+        }
+
+        // Bind DOM Buttons
+        document.getElementById('create-room-btn').onclick = () => window.createRoom();
+        document.getElementById('join-room-btn').onclick = () => window.joinRoom(document.getElementById('join-code-input').value);
+        document.getElementById('solo-demo-btn').onclick = () => window.joinRoom("DEMO");
+        document.getElementById('leave-room-btn').onclick = () => location.reload();
+    </script>
+</body>
+</html>
